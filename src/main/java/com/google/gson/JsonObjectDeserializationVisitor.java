@@ -16,6 +16,7 @@
 
 package com.google.gson;
 
+
 import java.lang.reflect.Field;
 import java.lang.reflect.Type;
 import java.util.Collection;
@@ -65,9 +66,9 @@ final class JsonObjectDeserializationVisitor<T> extends JsonDeserializationVisit
   public void visitObjectField(Field f, Object obj) {
     try {
       JsonObject jsonObject = json.getAsJsonObject();
-      String fName = f.getName();
-      if (jsonObject.has(fName)) {
-        JsonElement jsonChild = jsonObject.get(fName);
+      String fName = getFieldName(f);
+      JsonElement jsonChild = jsonObject.get(fName);
+      if (jsonChild != null) {
         Type fieldType = f.getGenericType();
         Object child = visitChildAsObject(fieldType, jsonChild);
         f.set(obj, child);
@@ -83,12 +84,12 @@ final class JsonObjectDeserializationVisitor<T> extends JsonDeserializationVisit
   public void visitCollectionField(Field f, Object obj) {
     try {
       JsonObject jsonObject = json.getAsJsonObject();
-      String fName = f.getName();
-      if (jsonObject.has(fName)) {
+      String fName = getFieldName(f);
+      JsonArray jsonArray = (JsonArray) jsonObject.get(fName);
+      if (jsonArray != null) {
         Collection collection = (Collection) objectConstructor.construct(f.getType());
         f.set(obj, collection);
         Type childType = new TypeInfo(f.getGenericType()).getGenericClass();
-        JsonArray jsonArray = jsonObject.get(fName).getAsJsonArray();
         for (JsonElement jsonChild : jsonArray) {
           Object child = visitChild(childType, jsonChild);
           if (childType == Object.class) {
@@ -108,9 +109,9 @@ final class JsonObjectDeserializationVisitor<T> extends JsonDeserializationVisit
   public void visitArrayField(Field f, Object obj) {
     try {
       JsonObject jsonObject = json.getAsJsonObject();
-      String fName = f.getName();
-      if (jsonObject.has(fName)) {
-        JsonArray jsonChild = (JsonArray) jsonObject.get(fName);
+      String fName = getFieldName(f);
+      JsonArray jsonChild = (JsonArray) jsonObject.get(fName);
+      if (jsonChild != null) {
         Object array = visitChildAsArray(f.getType(), jsonChild);
         f.set(obj, array);
       } else {
@@ -124,9 +125,9 @@ final class JsonObjectDeserializationVisitor<T> extends JsonDeserializationVisit
   public void visitPrimitiveField(Field f, Object obj) {
     try {
       JsonObject jsonObject = json.getAsJsonObject();
-      String fName = f.getName();
-      if (jsonObject.has(fName)) {
-        JsonPrimitive value = jsonObject.getAsJsonPrimitive(fName);
+      String fName = getFieldName(f);
+      JsonPrimitive value = jsonObject.getAsJsonPrimitive(fName);
+      if (value != null) {
         f.set(obj, typeAdapter.adaptType(value.getAsObject(), f.getType()));
       } else {
         // For Strings, we need to set the field to null
@@ -138,5 +139,10 @@ final class JsonObjectDeserializationVisitor<T> extends JsonDeserializationVisit
     } catch (IllegalAccessException e) {
       throw new RuntimeException(e);
     }
+  }
+
+  private String getFieldName(Field f) {
+    FieldNamingStrategy namingPolicy = factory.getFieldNamingPolicy();
+    return namingPolicy.translateName(f);
   }
 }

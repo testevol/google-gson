@@ -25,6 +25,7 @@ import com.google.gson.TestTypes.ClassWithCustomTypeConverter;
 import com.google.gson.TestTypes.ClassWithEnumFields;
 import com.google.gson.TestTypes.ClassWithExposedFields;
 import com.google.gson.TestTypes.ClassWithNoFields;
+import com.google.gson.TestTypes.ClassWithSerializedNameFields;
 import com.google.gson.TestTypes.ClassWithSubInterfacesOfCollection;
 import com.google.gson.TestTypes.ClassWithTransientFields;
 import com.google.gson.TestTypes.ContainsReferenceToSelfType;
@@ -32,6 +33,7 @@ import com.google.gson.TestTypes.MyEnum;
 import com.google.gson.TestTypes.MyParameterizedType;
 import com.google.gson.TestTypes.Nested;
 import com.google.gson.TestTypes.PrimitiveArray;
+import com.google.gson.TestTypes.StringWrapper;
 import com.google.gson.TestTypes.SubTypeOfNested;
 import com.google.gson.annotations.Since;
 import com.google.gson.reflect.TypeToken;
@@ -124,7 +126,7 @@ public class JsonSerializerTest extends TestCase {
     }));
 
     gson = new Gson(new ObjectNavigatorFactory(new ModifierBasedExclusionStrategy(
-        true, Modifier.TRANSIENT, Modifier.STATIC)));
+        true, Modifier.TRANSIENT, Modifier.STATIC), Gson.DEFAULT_NAMING_POLICY));
     assertEquals("{}", gson.toJson(new ClassWithNoFields() {
       // empty anonymous class
     }));
@@ -170,6 +172,13 @@ public class JsonSerializerTest extends TestCase {
   }
 
   public void testCollection() {
+    Collection<Integer> target = Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8, 9);
+    Type targetType = new TypeToken<Collection<Integer>>() {}.getType();
+    String json = gson.toJson(target, targetType);
+    assertEquals("[1,2,3,4,5,6,7,8,9]", json);
+  }
+
+  public void testCollectionWithoutSpecifyingType() {
     Collection<Integer> target = Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8, 9);
     assertEquals("[1,2,3,4,5,6,7,8,9]", gson.toJson(target));
   }
@@ -247,6 +256,24 @@ public class JsonSerializerTest extends TestCase {
     assertEquals(target.getExpectedJson(), gson.toJson(target));
   }
 
+  public void testArrayWithNulls() {
+    String[] array = {"foo", null, "bar"};
+	String expected = "[\"foo\",null,\"bar\"]";
+	String json = gson.toJson(array);
+	assertEquals(expected, json);
+  }
+
+  public void testListsWithNulls() {
+    List<String> list = new ArrayList<String>();
+    list.add("foo");
+    list.add(null);
+    list.add("bar");
+    String expected = "[\"foo\",null,\"bar\"]";
+    Type typeOfList = new TypeToken<List<String>>() {}.getType();
+    String json = gson.toJson(list, typeOfList);
+    assertEquals(expected, json);
+  }
+
   public void testSubInterfacesOfCollection() {
     List<Integer> list = new LinkedList<Integer>();
     list.add(0);
@@ -268,9 +295,8 @@ public class JsonSerializerTest extends TestCase {
     sortedSet.add('b');
     sortedSet.add('c');
     sortedSet.add('d');
-//    NavigableSet<String> navigableSet = Sets.newTreeSet("abc", "def", "ghi", "jkl");
     ClassWithSubInterfacesOfCollection target =
-        new ClassWithSubInterfacesOfCollection(list, queue, set, sortedSet/*, navigableSet */);
+        new ClassWithSubInterfacesOfCollection(list, queue, set, sortedSet);
     assertEquals(target.getExpectedJson(), gson.toJson(target));
   }
 
@@ -407,8 +433,8 @@ public class JsonSerializerTest extends TestCase {
     assertTrue(json.contains("\"a\":1"));
     assertTrue(json.contains("\"b\":2"));
   }
-  
-  public void testExposeAnnotation() {
+
+  public void testExposeAnnotation() throws Exception {
     // First test that Gson works without the expose annotation as well
     ClassWithExposedFields target = new ClassWithExposedFields();
     assertEquals(target.getExpectedJsonWithoutAnnotations(), gson.toJson(target));
@@ -416,5 +442,51 @@ public class JsonSerializerTest extends TestCase {
     // Now recreate gson with the proper setting
     gson = new GsonBuilder().excludeFieldsWithoutExposeAnnotation().create();
     assertEquals(target.getExpectedJson(), gson.toJson(target));
+  }
+
+  public void testSingleQuoteInStrings() throws Exception {
+    String valueWithQuotes = "beforeQuote'afterQuote";
+    String jsonRepresentation = gson.toJson(valueWithQuotes);
+    assertEquals(valueWithQuotes, gson.fromJson(jsonRepresentation, String.class));
+  }
+
+  public void testEscapingQuotesInStrings() throws Exception {
+    String valueWithQuotes = "beforeQuote\"afterQuote";
+    String jsonRepresentation = gson.toJson(valueWithQuotes);
+    String target = gson.fromJson(jsonRepresentation, String.class);
+    assertEquals(valueWithQuotes, target);
+  }
+
+  public void testEscapingQuotesInStringArray() throws Exception {
+    String[] valueWithQuotes = { "beforeQuote\"afterQuote" };
+    String jsonRepresentation = gson.toJson(valueWithQuotes);
+    String[] target = gson.fromJson(jsonRepresentation, String[].class);
+    assertEquals(1, target.length);
+    assertEquals(valueWithQuotes[0], target[0]);
+  }
+
+  public void testEscapingObjectFields() throws Exception {
+    BagOfPrimitives objWithPrimitives = new BagOfPrimitives(1L, 1, true, "test with\" <script>");
+    String jsonRepresentation = gson.toJson(objWithPrimitives);
+    assertFalse(jsonRepresentation.contains("<"));
+    assertFalse(jsonRepresentation.contains(">"));
+    assertTrue(jsonRepresentation.contains("\\\""));
+
+    BagOfPrimitives expectedObject = gson.fromJson(jsonRepresentation, BagOfPrimitives.class);
+    assertEquals(objWithPrimitives.getExpectedJson(), expectedObject.getExpectedJson());
+  }
+
+  public void testGsonWithNonDefaultFieldNamingPolicy() {
+    Gson gson = new GsonBuilder().setFieldNamingPolicy(
+        FieldNamingPolicy.UPPER_CAMEL_CASE).create();
+    StringWrapper target = new StringWrapper("blah");
+    assertEquals("{\"SomeConstantStringInstanceField\":\""
+        + target.someConstantStringInstanceField + "\"}", gson.toJson(target));
+  }
+
+  public void testGsonWithSerializedNameFieldNamingPolicy() {
+    ClassWithSerializedNameFields expected = new ClassWithSerializedNameFields(5);
+    String actual = gson.toJson(expected);
+    assertEquals(expected.getExpectedJson(), actual);
   }
 }

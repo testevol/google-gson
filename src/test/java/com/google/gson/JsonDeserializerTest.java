@@ -20,11 +20,14 @@ import com.google.gson.TestTypes.ArrayOfArrays;
 import com.google.gson.TestTypes.ArrayOfObjects;
 import com.google.gson.TestTypes.BagOfPrimitiveWrappers;
 import com.google.gson.TestTypes.BagOfPrimitives;
+import com.google.gson.TestTypes.ClassWithArray;
 import com.google.gson.TestTypes.ClassWithCustomTypeConverter;
 import com.google.gson.TestTypes.ClassWithEnumFields;
 import com.google.gson.TestTypes.ClassWithExposedFields;
 import com.google.gson.TestTypes.ClassWithNoFields;
+import com.google.gson.TestTypes.ClassWithObjects;
 import com.google.gson.TestTypes.ClassWithPrivateNoArgsConstructor;
+import com.google.gson.TestTypes.ClassWithSerializedNameFields;
 import com.google.gson.TestTypes.ClassWithSubInterfacesOfCollection;
 import com.google.gson.TestTypes.ClassWithTransientFields;
 import com.google.gson.TestTypes.ContainsReferenceToSelfType;
@@ -33,6 +36,7 @@ import com.google.gson.TestTypes.MyEnumCreator;
 import com.google.gson.TestTypes.MyParameterizedType;
 import com.google.gson.TestTypes.Nested;
 import com.google.gson.TestTypes.PrimitiveArray;
+import com.google.gson.TestTypes.StringWrapper;
 import com.google.gson.TestTypes.SubTypeOfNested;
 import com.google.gson.common.MoreAsserts;
 import com.google.gson.reflect.TypeToken;
@@ -42,6 +46,7 @@ import junit.framework.TestCase;
 import java.lang.reflect.Type;
 import java.net.URI;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
@@ -516,21 +521,21 @@ public class JsonDeserializerTest extends TestCase {
   public void testDefaultSupportForLocaleWithLanguage() throws Exception {
     String json = "\"en\"";
     Locale locale = gson.fromJson(json, Locale.class);
-    assertEquals("en", locale.getLanguage());    
+    assertEquals("en", locale.getLanguage());
   }
 
   public void testDefaultSupportForLocaleWithLanguageCountry() throws Exception {
     String json = "\"fr_CA\"";
     Locale locale = gson.fromJson(json, Locale.class);
-    assertEquals(Locale.CANADA_FRENCH, locale);    
+    assertEquals(Locale.CANADA_FRENCH, locale);
   }
 
   public void testDefaultSupportForLocaleWithLanguageCountryVariant() throws Exception {
     String json = "\"de_DE_EURO\"";
     Locale locale = gson.fromJson(json, Locale.class);
-    assertEquals("de", locale.getLanguage());    
-    assertEquals("DE", locale.getCountry());    
-    assertEquals("EURO", locale.getVariant());    
+    assertEquals("de", locale.getLanguage());
+    assertEquals("DE", locale.getCountry());
+    assertEquals("EURO", locale.getVariant());
   }
 
   public void testMap() throws Exception {
@@ -540,7 +545,7 @@ public class JsonDeserializerTest extends TestCase {
     assertEquals(1, target.get("a").intValue());
     assertEquals(2, target.get("b").intValue());
   }
-  
+
   public void testExposeAnnotation() {
     String json = '{' + "\"a\":" + 3 + ",\"b\":" + 4 + '}';
     // First test that Gson works without the expose annotation as well
@@ -553,5 +558,70 @@ public class JsonDeserializerTest extends TestCase {
     target = gson.fromJson(json, ClassWithExposedFields.class);
     assertEquals(3, target.a);
     assertEquals(2, target.b);
+  }
+
+  /**
+   * Created in response to Issue 14: http://code.google.com/p/google-gson/issues/detail?id=14
+   */
+  public void testNullArrays() {
+    String json = "{\"array\": null}";
+    ClassWithArray target = gson.fromJson(json, ClassWithArray.class);
+    assertNull(target.array);
+  }
+
+  /**
+   * Created in response to Issue 14: http://code.google.com/p/google-gson/issues/detail?id=14
+   */
+  public void testNullObjectFields() {
+    String json = "{\"bag\": null}";
+    ClassWithObjects target = gson.fromJson(json, ClassWithObjects.class);
+    assertNull(target.bag);
+  }
+
+  public void testArrayWithNulls() {
+    String json = "[\"foo\",null,\"bar\"]";
+    String[] expected = {"foo", null, "bar"};
+    String[] target = gson.fromJson(json, expected.getClass());
+    for (int i = 0; i < expected.length; ++i) {
+      assertEquals(expected[i], target[i]);
+    }
+  }
+
+  public void testListsWithNulls() {
+    List<String> expected = new ArrayList<String>();
+    expected.add("foo");
+    expected.add(null);
+    expected.add("bar");
+    String json = "[\"foo\",null,\"bar\"]";
+    Type expectedType = new TypeToken<List<String>>() {}.getType();
+    List<String> target = gson.fromJson(json, expectedType);
+    for (int i = 0; i < expected.size(); ++i) {
+      assertEquals(expected.get(i), target.get(i));
+    }
+  }
+
+  /**
+   * Created in response to Issue 14: http://code.google.com/p/google-gson/issues/detail?id=14
+   */
+  public void testNullPrimitiveFields() {
+    String json = "{\"longValue\":null}";
+    BagOfPrimitives target = gson.fromJson(json, BagOfPrimitives.class);
+    assertEquals(BagOfPrimitives.DEFAULT_VALUE, target.longValue);
+  }
+
+  public void testGsonWithNonDefaultFieldNamingPolicy() {
+    Gson gson = new GsonBuilder().setFieldNamingPolicy(
+        FieldNamingPolicy.UPPER_CAMEL_CASE).create();
+    StringWrapper target = new StringWrapper("SomeValue");
+    String jsonRepresentation = gson.toJson(target);
+    StringWrapper deserializedObject = gson.fromJson(jsonRepresentation, StringWrapper.class);
+    assertEquals(target.someConstantStringInstanceField, deserializedObject.someConstantStringInstanceField);
+  }
+
+  public void testGsonWithSerializedNameFieldNamingPolicy() {
+    ClassWithSerializedNameFields expected = new ClassWithSerializedNameFields(5);
+    ClassWithSerializedNameFields actual =
+        gson.fromJson(expected.getExpectedJson(), ClassWithSerializedNameFields.class);
+    assertEquals(expected.f, actual.f);
   }
 }
