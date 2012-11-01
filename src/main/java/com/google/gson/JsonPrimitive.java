@@ -16,6 +16,9 @@
 
 package com.google.gson;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
+
 /**
  * A class representing a Json primitive value. A primitive value
  * is either a String, a Java primitive, or a Java primitive
@@ -177,6 +180,36 @@ public final class JsonPrimitive extends JsonElement {
   @Override
   public double getAsDouble() {
     return ((Number) value).doubleValue();
+  }
+
+  /**
+   * convenience method to get this element as a {@link BigDecimal}.
+   *
+   * @return get this element as a {@link BigDecimal}.
+   * @throws NumberFormatException if the value contained is not a valid {@link BigDecimal}.
+   */
+  @Override
+  public BigDecimal getAsBigDecimal() {
+    if (value instanceof BigDecimal) {
+      return (BigDecimal) value;
+    } else {
+      return new BigDecimal(value.toString());
+    }
+  }
+
+  /**
+   * convenience method to get this element as a {@link BigInteger}.
+   *
+   * @return get this element as a {@link BigInteger}.
+   * @throws NumberFormatException if the value contained is not a valid {@link BigInteger}.
+   */
+  @Override
+  public BigInteger getAsBigInteger() {
+    if (value instanceof BigInteger) {
+      return (BigInteger) value;
+    } else {
+      return new BigInteger(value.toString());
+    }
   }
 
   /**

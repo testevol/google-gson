@@ -31,33 +31,41 @@ import java.util.Collection;
 final class JsonArrayDeserializationVisitor<T> extends JsonDeserializationVisitor<T> {
   private final Class<?> componentType;
 
-  @SuppressWarnings("unchecked")
   JsonArrayDeserializationVisitor(JsonArray jsonArray, Type arrayType,
       ObjectNavigatorFactory factory, ObjectConstructor objectConstructor,
       TypeAdapter typeAdapter, ParameterizedTypeHandlerMap<JsonDeserializer<?>> deserializers,
       JsonDeserializationContext context) {
-    super(jsonArray, factory, objectConstructor, typeAdapter, deserializers, context);
+    super(jsonArray, arrayType, factory, objectConstructor, typeAdapter, deserializers, context);
+    this.componentType = TypeUtils.toRawClass(arrayType);
+  }
 
-    TypeInfo<T> arrayTypeInfo = new TypeInfo<T>(arrayType);
-    this.componentType = arrayTypeInfo.getSecondLevelClass();
+  @Override
+  @SuppressWarnings("unchecked")
+  protected T constructTarget() {
 
-    if (arrayTypeInfo.isPrimitiveOrStringAndNotAnArray()) {
+    TypeInfo typeInfo = new TypeInfo(targetType);
+
+    JsonArray jsonArray = json.getAsJsonArray();
+    if (typeInfo.isPrimitiveOrStringAndNotAnArray()) {
       if (jsonArray.size() != 1) {
         throw new IllegalArgumentException(
             "Primitives should be an array of length 1, but was: " + jsonArray);
       }
-      target = (T) objectConstructor.construct(arrayTypeInfo.getWrappedClazz());
-    } else if (arrayTypeInfo.isArray()) {
-      target = (T) objectConstructor.constructArray(arrayTypeInfo.getSecondLevelClass(),
+      return (T) objectConstructor.construct(typeInfo.getWrappedClass());
+    } else if (typeInfo.isArray()) {
+      TypeInfoArray arrayTypeInfo = TypeInfoFactory.getTypeInfoForArray(targetType);
+      // We know that we are getting back an array of the required type, so
+      // this typecasting is safe.
+      return (T) objectConstructor.constructArray(arrayTypeInfo.getSecondLevelType(),
           jsonArray.size());
     } else { // is a collection
-      target = (T) objectConstructor.construct(arrayTypeInfo.getSecondLevelClass());
+      return (T) objectConstructor.construct(typeInfo.getRawClass());
     }
   }
 
   public void visitArray(Object array, Type arrayType) {
     JsonArray jsonArray = json.getAsJsonArray();
-    TypeInfo<?> arrayTypeInfo = new TypeInfo<Object>(arrayType);
+    TypeInfoArray arrayTypeInfo = TypeInfoFactory.getTypeInfoForArray(arrayType);
     for (int i = 0; i < jsonArray.size(); i++) {
       JsonElement jsonChild = jsonArray.get(i);
       Object child;
@@ -65,11 +73,11 @@ final class JsonArrayDeserializationVisitor<T> extends JsonDeserializationVisito
       if (jsonChild == null) {
         child = null;
       } else if (jsonChild instanceof JsonObject) {
-        child = visitChildAsObject(arrayTypeInfo.getComponentType(), jsonChild);
+        child = visitChildAsObject(arrayTypeInfo.getComponentRawType(), jsonChild);
       } else if (jsonChild instanceof JsonArray) {
-        child = visitChildAsArray(arrayTypeInfo.getSecondLevelClass(), jsonChild.getAsJsonArray());
+        child = visitChildAsArray(arrayTypeInfo.getSecondLevelType(), jsonChild.getAsJsonArray());
       } else if (jsonChild instanceof JsonPrimitive) {
-        child = visitChildAsPrimitive(arrayTypeInfo.getComponentType(),
+        child = visitChildAsPrimitive(arrayTypeInfo.getComponentRawType(),
             jsonChild.getAsJsonPrimitive());
       } else {
         throw new IllegalStateException();
@@ -79,10 +87,8 @@ final class JsonArrayDeserializationVisitor<T> extends JsonDeserializationVisito
   }
 
   @SuppressWarnings("unchecked")
-  public void visitCollection(@SuppressWarnings("unchecked") Collection collection,
-      Type collectionType) {
-    TypeInfo<Object> childTypeInfo = new TypeInfo<Object>(collectionType);
-    Type childType = childTypeInfo.getGenericClass();
+  public void visitCollection(Collection collection, Type collectionType) {
+    Type childType = TypeUtils.getActualTypeForFirstTypeVariable(collectionType);
     for (JsonElement jsonChild : json.getAsJsonArray()) {
       if (childType == Object.class) {
         throw new JsonParseException(collection +
@@ -110,19 +116,19 @@ final class JsonArrayDeserializationVisitor<T> extends JsonDeserializationVisito
     throw new UnsupportedOperationException();
   }
 
-  public void visitArrayField(Field f, Object obj) {
+  public void visitArrayField(Field f, Type typeOfF, Object obj) {
     throw new UnsupportedOperationException();
   }
 
-  public void visitCollectionField(Field f, Object obj) {
+  public void visitCollectionField(Field f, Type typeOfF, Object obj) {
     throw new UnsupportedOperationException();
   }
 
-  public void visitObjectField(Field f, Object obj) {
+  public void visitObjectField(Field f, Type typeOfF, Object obj) {
     throw new UnsupportedOperationException();
   }
 
-  public void visitPrimitiveField(Field f, Object obj) {
+  public void visitPrimitiveField(Field f, Type typeOfF, Object obj) {
     throw new UnsupportedOperationException();
   }
 }

@@ -16,7 +16,6 @@
 
 package com.google.gson;
 
-
 import java.lang.reflect.Field;
 import java.lang.reflect.Type;
 import java.util.Collection;
@@ -30,13 +29,17 @@ import java.util.Collection;
  */
 final class JsonObjectDeserializationVisitor<T> extends JsonDeserializationVisitor<T> {
 
-  @SuppressWarnings("unchecked")
   JsonObjectDeserializationVisitor(JsonElement json, Type type,
       ObjectNavigatorFactory factory, ObjectConstructor objectConstructor,
       TypeAdapter typeAdapter, ParameterizedTypeHandlerMap<JsonDeserializer<?>> deserializers,
       JsonDeserializationContext context) {
-    super(json, factory, objectConstructor, typeAdapter, deserializers, context);
-    this.target = (T) objectConstructor.construct(type);
+    super(json, type, factory, objectConstructor, typeAdapter, deserializers, context);
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  protected T constructTarget() {
+    return (T) objectConstructor.construct(targetType);
   }
 
   public void startVisitingObject(Object node) {
@@ -63,14 +66,13 @@ final class JsonObjectDeserializationVisitor<T> extends JsonDeserializationVisit
     throw new IllegalStateException();
   }
 
-  public void visitObjectField(Field f, Object obj) {
+  public void visitObjectField(Field f, Type typeOfF, Object obj) {
     try {
       JsonObject jsonObject = json.getAsJsonObject();
       String fName = getFieldName(f);
       JsonElement jsonChild = jsonObject.get(fName);
       if (jsonChild != null) {
-        Type fieldType = f.getGenericType();
-        Object child = visitChildAsObject(fieldType, jsonChild);
+        Object child = visitChildAsObject(typeOfF, jsonChild);
         f.set(obj, child);
       } else {
         f.set(obj, null);
@@ -81,15 +83,15 @@ final class JsonObjectDeserializationVisitor<T> extends JsonDeserializationVisit
   }
 
   @SuppressWarnings("unchecked")
-  public void visitCollectionField(Field f, Object obj) {
+  public void visitCollectionField(Field f, Type typeOfF, Object obj) {
     try {
       JsonObject jsonObject = json.getAsJsonObject();
       String fName = getFieldName(f);
       JsonArray jsonArray = (JsonArray) jsonObject.get(fName);
       if (jsonArray != null) {
-        Collection collection = (Collection) objectConstructor.construct(f.getType());
+        Collection collection = (Collection) objectConstructor.construct(typeOfF);
         f.set(obj, collection);
-        Type childType = new TypeInfo(f.getGenericType()).getGenericClass();
+        Type childType = TypeUtils.getActualTypeForFirstTypeVariable(typeOfF);
         for (JsonElement jsonChild : jsonArray) {
           Object child = visitChild(childType, jsonChild);
           if (childType == Object.class) {
@@ -106,13 +108,13 @@ final class JsonObjectDeserializationVisitor<T> extends JsonDeserializationVisit
     }
   }
 
-  public void visitArrayField(Field f, Object obj) {
+  public void visitArrayField(Field f, Type typeOfF, Object obj) {
     try {
       JsonObject jsonObject = json.getAsJsonObject();
       String fName = getFieldName(f);
       JsonArray jsonChild = (JsonArray) jsonObject.get(fName);
       if (jsonChild != null) {
-        Object array = visitChildAsArray(f.getType(), jsonChild);
+        Object array = visitChildAsArray(typeOfF, jsonChild);
         f.set(obj, array);
       } else {
         f.set(obj, null);
@@ -122,13 +124,13 @@ final class JsonObjectDeserializationVisitor<T> extends JsonDeserializationVisit
     }
   }
 
-  public void visitPrimitiveField(Field f, Object obj) {
+  public void visitPrimitiveField(Field f, Type typeOfF, Object obj) {
     try {
       JsonObject jsonObject = json.getAsJsonObject();
       String fName = getFieldName(f);
       JsonPrimitive value = jsonObject.getAsJsonPrimitive(fName);
       if (value != null) {
-        f.set(obj, typeAdapter.adaptType(value.getAsObject(), f.getType()));
+        f.set(obj, typeAdapter.adaptType(value.getAsObject(), TypeUtils.toRawClass(typeOfF)));
       } else {
         // For Strings, we need to set the field to null
         // For other primitive types, any value created during default construction is fine

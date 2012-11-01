@@ -16,7 +16,6 @@
 
 package com.google.gson;
 
-
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.Type;
@@ -33,15 +32,17 @@ final class JsonSerializationVisitor implements ObjectNavigator.Visitor {
 
   private final ObjectNavigatorFactory factory;
   private final ParameterizedTypeHandlerMap<JsonSerializer<?>> serializers;
+  private final boolean serializeNulls;
 
   private final JsonSerializationContext context;
 
   private JsonElement root;
 
-  JsonSerializationVisitor(ObjectNavigatorFactory factory,
+  JsonSerializationVisitor(ObjectNavigatorFactory factory, boolean serializeNulls,
       ParameterizedTypeHandlerMap<JsonSerializer<?>> serializers,
       JsonSerializationContext context) {
     this.factory = factory;
+    this.serializeNulls = serializeNulls;
     this.serializers = serializers;
     this.context = context;
   }
@@ -57,8 +58,8 @@ final class JsonSerializationVisitor implements ObjectNavigator.Visitor {
   public void visitArray(Object array, Type arrayType) {
     assignToRoot(new JsonArray());
     int length = Array.getLength(array);
-    TypeInfo<?> fieldTypeInfo = new TypeInfo<Object>(arrayType);
-    Type componentType = fieldTypeInfo.getSecondLevelClass();
+    TypeInfoArray fieldTypeInfo = TypeInfoFactory.getTypeInfoForArray(arrayType);
+    Type componentType = fieldTypeInfo.getSecondLevelType();
     for (int i = 0; i < length; ++i) {
       Object child = Array.get(array, i);
       addAsArrayElement(componentType, child);
@@ -69,8 +70,7 @@ final class JsonSerializationVisitor implements ObjectNavigator.Visitor {
   public void visitCollection(Collection collection, Type collectionType) {
     assignToRoot(new JsonArray());
     for (Object child : collection) {
-      TypeInfo<?> collectionTypeInfo = new TypeInfo<Object>(collectionType);
-      Type childType = collectionTypeInfo.getGenericClass();
+      Type childType = TypeUtils.getActualTypeForFirstTypeVariable(collectionType);
       if (childType == Object.class && child != null) {
         // Try our luck some other way
         childType = child.getClass();
@@ -79,21 +79,20 @@ final class JsonSerializationVisitor implements ObjectNavigator.Visitor {
     }
   }
 
-  public void visitArrayField(Field f, Object obj) {
+  public void visitArrayField(Field f, Type typeOfF, Object obj) {
     if (!isFieldNull(f, obj)) {
       Object array = getFieldValue(f, obj);
-      addAsChildOfObject(f, f.getGenericType(), array);
+      addAsChildOfObject(f, typeOfF, array);
     }
   }
 
-  public void visitCollectionField(Field f, Object obj) {
+  public void visitCollectionField(Field f, Type typeOfF, Object obj) {
     if (!isFieldNull(f, obj)) {
-      Type genericTypeOfCollection = f.getGenericType();
-      if (genericTypeOfCollection == null) {
+      if (typeOfF == null) {
         throw new RuntimeException("Can not handle non-generic collections");
       }
       Object collection = getFieldValue(f, obj);
-      addAsChildOfObject(f, genericTypeOfCollection, collection);
+      addAsChildOfObject(f, typeOfF, collection);
     }
   }
 
@@ -110,16 +109,23 @@ final class JsonSerializationVisitor implements ObjectNavigator.Visitor {
     assignToRoot(serializer.serialize(obj, objType, context));
   }
 
-  public void visitObjectField(Field f, Object obj) {
-    if (!isFieldNull(f, obj)) {
-      Type fieldType = f.getGenericType();
+  public void visitObjectField(Field f, Type typeOfF, Object obj) {
+    if (isFieldNull(f, obj)) {
+      if (serializeNulls) {
+        addChildAsElement(f, new JsonNull());
+      }
+    } else {
       Object fieldValue = getFieldValue(f, obj);
-      addAsChildOfObject(f, fieldType, fieldValue);
+      addAsChildOfObject(f, typeOfF, fieldValue);
     }
   }
 
   private void addAsChildOfObject(Field f, Type fieldType, Object fieldValue) {
     JsonElement childElement = getJsonElementForChild(fieldType, fieldValue);
+    addChildAsElement(f, childElement);
+  }
+
+  private void addChildAsElement(Field f, JsonElement childElement) {
     FieldNamingStrategy namingPolicy = factory.getFieldNamingPolicy();
     root.getAsJsonObject().add(namingPolicy.translateName(f), childElement);
   }
@@ -132,7 +138,7 @@ final class JsonSerializationVisitor implements ObjectNavigator.Visitor {
       root.getAsJsonArray().add(childElement);
     }
   }
-  
+
   private void addNullAsArrayElement() {
     root.getAsJsonArray().add(null);
   }
@@ -140,18 +146,17 @@ final class JsonSerializationVisitor implements ObjectNavigator.Visitor {
   private JsonElement getJsonElementForChild(Type fieldType, Object fieldValue) {
     ObjectNavigator on = factory.create(fieldValue, fieldType);
     JsonSerializationVisitor childVisitor =
-        new JsonSerializationVisitor(factory, serializers, context);
+        new JsonSerializationVisitor(factory, serializeNulls, serializers, context);
     on.accept(childVisitor);
     return childVisitor.getJsonElement();
   }
 
-  public void visitPrimitiveField(Field f, Object obj) {
+  public void visitPrimitiveField(Field f, Type typeOfF, Object obj) {
     if (!isFieldNull(f, obj)) {
-      TypeInfo<?> type = new TypeInfo<Object>(f.getType());
-      Type fieldType = f.getGenericType();
-      if (type.isPrimitiveOrStringAndNotAnArray()) {
+      TypeInfo typeInfo = new TypeInfo(typeOfF);
+      if (typeInfo.isPrimitiveOrStringAndNotAnArray()) {
         Object fieldValue = getFieldValue(f, obj);
-        addAsChildOfObject(f, fieldType, fieldValue);
+        addAsChildOfObject(f, typeOfF, fieldValue);
       } else {
         throw new IllegalArgumentException("Not a primitive type");
       }

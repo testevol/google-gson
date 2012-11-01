@@ -37,13 +37,15 @@ abstract class JsonDeserializationVisitor<T> implements ObjectNavigator.Visitor 
   protected final ParameterizedTypeHandlerMap<JsonDeserializer<?>> deserializers;
   protected T target;
   protected final JsonElement json;
+  protected final Type targetType;
   private final JsonDeserializationContext context;
 
-  public JsonDeserializationVisitor(JsonElement json, ObjectNavigatorFactory factory,
-      ObjectConstructor objectConstructor, TypeAdapter typeAdapter,
-      ParameterizedTypeHandlerMap<JsonDeserializer<?>> deserializers, 
+  public JsonDeserializationVisitor(JsonElement json, Type targetType,
+      ObjectNavigatorFactory factory, ObjectConstructor objectConstructor, TypeAdapter typeAdapter,
+      ParameterizedTypeHandlerMap<JsonDeserializer<?>> deserializers,
       JsonDeserializationContext context) {
     Preconditions.checkNotNull(json);
+    this.targetType = targetType;
     this.factory = factory;
     this.objectConstructor = objectConstructor;
     this.typeAdapter = typeAdapter;
@@ -53,9 +55,14 @@ abstract class JsonDeserializationVisitor<T> implements ObjectNavigator.Visitor 
   }
 
   T getTarget() {
+    if (target == null) {
+      target = constructTarget();
+    }
     return target;
   }
-  
+
+  protected abstract T constructTarget();
+
   @SuppressWarnings("unchecked")
   public final void visitEnum(Object obj, Type objType) {
     JsonDeserializer<T> deserializer = (JsonDeserializer<T>) deserializers.getHandlerFor(objType);
@@ -79,37 +86,31 @@ abstract class JsonDeserializationVisitor<T> implements ObjectNavigator.Visitor 
     return false;
   }
 
-  @SuppressWarnings("unchecked")
   final Object visitChildAsObject(Type childType, JsonElement jsonChild) {
-    JsonDeserializationVisitor<?> childVisitor = 
-      new JsonObjectDeserializationVisitor<Object>(jsonChild, childType, 
+    JsonDeserializationVisitor<?> childVisitor =
+      new JsonObjectDeserializationVisitor<Object>(jsonChild, childType,
           factory, objectConstructor, typeAdapter, deserializers, context);
-    return visitChild(childType, childVisitor);      
+    return visitChild(childType, childVisitor);
   }
 
-  @SuppressWarnings("unchecked")
   final Object visitChildAsArray(Type childType, JsonArray jsonChild) {
-    JsonDeserializationVisitor<?> childVisitor = 
-      new JsonArrayDeserializationVisitor<Object>(jsonChild.getAsJsonArray(), childType, 
+    JsonDeserializationVisitor<?> childVisitor =
+      new JsonArrayDeserializationVisitor<Object>(jsonChild.getAsJsonArray(), childType,
           factory, objectConstructor, typeAdapter, deserializers, context);
-    return visitChild(childType, childVisitor);      
+    return visitChild(childType, childVisitor);
   }
 
-  @SuppressWarnings("unchecked")
   final Object visitChildAsPrimitive(Type childType, JsonPrimitive jsonChild) {
     Preconditions.checkNotNull(jsonChild);
     Class<?> childClass;
     if (childType instanceof Class) {
-      childClass = (Class) childType;
+      childClass = (Class<?>) childType;
     } else {
-      TypeInfo<?> childTypeInfo = new TypeInfo(childType);
-      Type genericClass = childTypeInfo.getGenericClass();
-      childClass = new TypeInfo(genericClass).getTopLevelClass();
+      childClass = TypeUtils.toRawClass(childType);
     }
     return typeAdapter.adaptType(jsonChild.getAsObject(), childClass);
   }
 
-  @SuppressWarnings("unchecked")
   final Object visitChild(Type childType, JsonElement jsonChild) {
     if (jsonChild == null) {
       return null;

@@ -17,6 +17,8 @@
 package com.google.gson;
 
 import java.io.PrintWriter;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Formats Json in a nicely indented way with a specified print margin.
@@ -128,22 +130,27 @@ final class JsonPrintFormatter implements JsonFormatter {
   }
 
   private class PrintFormattingVisitor implements JsonElementVisitor {
+    private final Map<Integer, Boolean> first;
     private final JsonWriter writer;
-    private boolean first;
+    private final boolean serializeNulls;
+    private int level = 0;
 
-    PrintFormattingVisitor(JsonWriter writer) {
+    PrintFormattingVisitor(JsonWriter writer, boolean serializeNulls) {
       this.writer = writer;
+      this.serializeNulls = serializeNulls;
+      this.first = new HashMap<Integer, Boolean>();
     }
 
     private void addCommaCheckingFirst() {
-      if (first) {
-        first = false;
+      if (first.get(level) != Boolean.FALSE) {
+        first.put(level, false);
       } else {
         writer.elementSeparator();
       }
     }
 
     public void startArray(JsonArray array) {
+      first.put(++level, true);
       writer.beginArray();
     }
 
@@ -165,6 +172,7 @@ final class JsonPrintFormatter implements JsonFormatter {
     }
 
     public void endArray(JsonArray array) {
+      level--;
       writer.endArray();
     }
 
@@ -172,23 +180,32 @@ final class JsonPrintFormatter implements JsonFormatter {
       writer.beginObject();
     }
 
-    public void visitObjectMember(JsonObject parent, String memberName, JsonPrimitive member, boolean isFirst) {
+    public void visitObjectMember(JsonObject parent, String memberName, JsonPrimitive member, 
+        boolean isFirst) {
       addCommaCheckingFirst();
       writer.key(memberName);
       writer.fieldSeparator();
       writer.value(member.toString());
     }
 
-    public void visitObjectMember(JsonObject parent, String memberName, JsonArray member, boolean isFirst) {
+    public void visitObjectMember(JsonObject parent, String memberName, JsonArray member, 
+        boolean isFirst) {
       addCommaCheckingFirst();
       writer.key(memberName);
       writer.fieldSeparator();
     }
 
-    public void visitObjectMember(JsonObject parent, String memberName, JsonObject member, boolean isFirst) {
+    public void visitObjectMember(JsonObject parent, String memberName, JsonObject member, 
+        boolean isFirst) {
       addCommaCheckingFirst();
       writer.key(memberName);
       writer.fieldSeparator();
+    }
+
+    public void visitNullObjectMember(JsonObject parent, String memberName, boolean isFirst) {
+      if (serializeNulls) {
+        visitObjectMember(parent, memberName, (JsonObject) null, isFirst);
+      }
     }
     
     public void endObject(JsonObject object) {
@@ -204,13 +221,14 @@ final class JsonPrintFormatter implements JsonFormatter {
     }
   }
 
-  public void format(JsonElement root, PrintWriter writer) {
+  public void format(JsonElement root, PrintWriter writer, boolean serializeNulls) {
     if (root == null) {
       return;
     }
     JsonWriter jsonWriter = new JsonWriter(writer);
-    JsonElementVisitor visitor = new JsonEscapingVisitor(new PrintFormattingVisitor(jsonWriter));
-    JsonTreeNavigator navigator = new JsonTreeNavigator(visitor);
+    JsonElementVisitor visitor = 
+      new JsonEscapingVisitor(new PrintFormattingVisitor(jsonWriter, serializeNulls));    
+    JsonTreeNavigator navigator = new JsonTreeNavigator(visitor, serializeNulls);
     navigator.navigate(root);
     jsonWriter.finishLine();
   }

@@ -46,7 +46,7 @@ final class MappedObjectConstructor implements ObjectConstructor {
       InstanceCreator<T> creator = (InstanceCreator<T>) instanceCreatorMap.getHandlerFor(typeOfT);
       return creator.createInstance(typeOfT);
     }
-    TypeInfo<T> typeInfo = new TypeInfo<T>(typeOfT);
+    TypeInfo typeInfo = new TypeInfo(typeOfT);
     if (typeInfo.isEnum()) {
       InstanceCreator<T> creator =
         (InstanceCreator<T>) instanceCreatorMap.getHandlerFor(Enum.class);
@@ -56,7 +56,7 @@ final class MappedObjectConstructor implements ObjectConstructor {
   }
 
   public Object constructArray(Type type, int length) {
-    return Array.newInstance(TypeInfo.toClass(type), length);
+    return Array.newInstance(TypeUtils.toRawClass(type), length);
   }
 
   private <T> T constructWithNoArgConstructor(Type typeOfT) {
@@ -81,8 +81,8 @@ final class MappedObjectConstructor implements ObjectConstructor {
 
   @SuppressWarnings({"unchecked", "cast"})
   private <T> Constructor<T> getNoArgsConstructor(Type typeOfT) {
-    TypeInfo<T> typeInfo = new TypeInfo<T>(typeOfT);
-    Class<T> clazz = (Class<T>) typeInfo.getTopLevelClass();
+    TypeInfo typeInfo = new TypeInfo(typeOfT);
+    Class<T> clazz = (Class<T>) typeInfo.getRawClass();
     Constructor<T>[] declaredConstructors = (Constructor<T>[]) clazz.getDeclaredConstructors();
     AccessibleObject.setAccessible(declaredConstructors, true);
     for (Constructor<T> constructor : declaredConstructors) {

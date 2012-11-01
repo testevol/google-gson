@@ -60,22 +60,22 @@ final class ObjectNavigator {
     /**
      * This is called to visit an object field of the current object
      */
-    void visitObjectField(Field f, Object obj);
+    void visitObjectField(Field f, Type typeOfF, Object obj);
 
     /**
      * This is called to visit a field of type Collection of the current object
      */
-    void visitCollectionField(Field f, Object obj);
+    void visitCollectionField(Field f, Type typeOfF, Object obj);
 
     /**
      * This is called to visit an array field of the current object
      */
-    void visitArrayField(Field f, Object obj);
+    void visitArrayField(Field f, Type typeOfF, Object obj);
 
     /**
      * This is called to visit a primitive field of the current object
      */
-    void visitPrimitiveField(Field f, Object obj);
+    void visitPrimitiveField(Field f, Type typeOfF, Object obj);
 
     /**
      * This is called to visit an enum object
@@ -115,13 +115,12 @@ final class ObjectNavigator {
    * Navigate all the fields of the specified object.
    * If a field is null, it does not get visited.
    */
-  @SuppressWarnings("unchecked")
   public void accept(Visitor visitor) {
     if (obj == null) {
       return;
     }
-    TypeInfo<?> objTypeInfo = new TypeInfo<Object>(objType);
-    if (exclusionStrategy.shouldSkipClass(objTypeInfo.getTopLevelClass())) {
+    TypeInfo objTypeInfo = new TypeInfo(objType);
+    if (exclusionStrategy.shouldSkipClass(objTypeInfo.getRawClass())) {
       return;
     }
 
@@ -131,13 +130,13 @@ final class ObjectNavigator {
     ancestors.push(obj);
 
     try {
-      if (isCollectionOrArray(objTypeInfo)) {
+      if (objTypeInfo.isCollectionOrArray()) {
         if (objTypeInfo.isArray()) {
           visitor.visitArray(obj, objType);
         } else { // must be a collection
-          visitor.visitCollection((Collection<?>)obj, objType);
+          visitor.visitCollection((Collection<?>) obj, objType);
         }
-      } else if (objTypeInfo.getTopLevelClass().isEnum()) {
+      } else if (objTypeInfo.isEnum()) {
         visitor.visitEnum(obj, objType);
       } else if (objTypeInfo.isPrimitiveOrStringAndNotAnArray()) {
         visitor.visitPrimitiveValue(obj);
@@ -146,7 +145,7 @@ final class ObjectNavigator {
           visitor.startVisitingObject(obj);
           // For all classes in the inheritance hierarchy (including the current class),
           // visit all fields
-          for (Class<?> curr = objTypeInfo.getTopLevelClass();
+          for (Class<?> curr = objTypeInfo.getRawClass();
               curr != null && !curr.equals(Object.class); curr = curr.getSuperclass()) {
             if (!curr.isSynthetic()) {
               navigateClassFields(obj, curr, visitor);
@@ -164,25 +163,22 @@ final class ObjectNavigator {
     Field[] fields = clazz.getDeclaredFields();
     AccessibleObject.setAccessible(fields, true);
     for (Field f : fields) {
-      TypeInfo<?> fieldTypeInfo = new TypeInfo<Object>(f.getType());
+      TypeInfo fieldTypeInfo = TypeInfoFactory.getTypeInfoForField(f, objType);
+      Type actualTypeOfField = fieldTypeInfo.getActualType();
       if (exclusionStrategy.shouldSkipField(f)) {
         continue; // skip
-      } else if (isCollectionOrArray(fieldTypeInfo)) {
+      } else if (fieldTypeInfo.isCollectionOrArray()) {
         if (fieldTypeInfo.isArray()) {
-          visitor.visitArrayField(f, obj);
+          visitor.visitArrayField(f, actualTypeOfField, obj);
         } else { // must be Collection
-          visitor.visitCollectionField(f, obj);
+          visitor.visitCollectionField(f, actualTypeOfField, obj);
         }
       } else if (fieldTypeInfo.isPrimitiveOrStringAndNotAnArray()) {
-        visitor.visitPrimitiveField(f, obj);
+        visitor.visitPrimitiveField(f, actualTypeOfField, obj);
       } else {
-        visitor.visitObjectField(f, obj);
+        visitor.visitObjectField(f, actualTypeOfField, obj);
       }
     }
-  }
-
-  private static boolean isCollectionOrArray(TypeInfo<?> typeInfo) {
-    return Collection.class.isAssignableFrom(typeInfo.getTopLevelClass()) || typeInfo.isArray();
   }
 
   @SuppressWarnings("unchecked")

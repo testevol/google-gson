@@ -31,116 +31,79 @@ import java.util.List;
  */
 public class TypeInfoTest extends TestCase {
 
-  public void testPrimitiveArray() throws Exception {
-    TypeInfo<int[]> arrayTypeInfo = new TypeInfo<int[]>(int[].class);
-
-    assertTrue(arrayTypeInfo.isArray());
-    assertEquals(int.class, arrayTypeInfo.getSecondLevelClass());
-    assertFalse(arrayTypeInfo.isPrimitiveOrStringAndNotAnArray());
-  }
-
-  public void testObjectArray() throws Exception {
-    TypeInfo<String[]> arrayTypeInfo = new TypeInfo<String[]>(String[].class);
-
-    assertTrue(arrayTypeInfo.isArray());
-    assertEquals(String.class, arrayTypeInfo.getSecondLevelClass());
-    assertEquals(String[].class, arrayTypeInfo.getTopLevelClass());
-  }
-
-  @SuppressWarnings("unchecked")
   public void testPrimitive() throws Exception {
     TypeInfo typeInfo = new TypeInfo(boolean.class);
 
     assertFalse(typeInfo.isArray());
     assertFalse(typeInfo.isString());
     assertTrue(typeInfo.isPrimitive());
-    assertEquals(boolean.class, typeInfo.getSecondLevelClass());
-    assertEquals(Boolean.class, typeInfo.getWrappedClazz());
+    assertEquals(boolean.class, typeInfo.getRawClass());
+    assertEquals(Boolean.class, typeInfo.getWrappedClass());
   }
 
   public void testPrimitiveWrapper() throws Exception {
-    TypeInfo<Integer> typeInfo = new TypeInfo<Integer>(Integer.class);
+    TypeInfo typeInfo = new TypeInfo(Integer.class);
 
-    assertEquals(Integer.class, typeInfo.getSecondLevelClass());
+    assertEquals(Integer.class, typeInfo.getRawClass());
     assertTrue(typeInfo.isPrimitive());
     assertTrue(typeInfo.isPrimitiveOrStringAndNotAnArray());
   }
 
   public void testString() throws Exception {
-    TypeInfo<String> typeInfo = new TypeInfo<String>(String.class);
+    TypeInfo typeInfo = new TypeInfo(String.class);
 
     assertFalse(typeInfo.isArray());
     assertFalse(typeInfo.isPrimitive());
-    assertEquals(String.class, typeInfo.getSecondLevelClass());
+    assertEquals(String.class, typeInfo.getRawClass());
     assertTrue(typeInfo.isPrimitiveOrStringAndNotAnArray());
   }
 
   public void testObject() throws Exception {
-    TypeInfo<Object> typeInfo = new TypeInfo<Object>(Object.class);
+    TypeInfo typeInfo = new TypeInfo(Object.class);
 
     assertFalse(typeInfo.isArray());
     assertFalse(typeInfo.isPrimitive());
-    assertEquals(Object.class, typeInfo.getSecondLevelClass());
+    assertEquals(Object.class, typeInfo.getRawClass());
     assertFalse(typeInfo.isPrimitiveOrStringAndNotAnArray());
   }
 
-  @SuppressWarnings("unchecked")
   public void testPrimitiveType() throws Exception {
-    TypeInfo typeInfo = new TypeInfo(long[].class);
-    assertTrue(typeInfo.isArray());
-    assertEquals(long.class, typeInfo.getSecondLevelClass());
-
-    typeInfo = new TypeInfo(long.class);
+    TypeInfo typeInfo = new TypeInfo(long.class);
     assertFalse(typeInfo.isArray());
-    assertEquals(long.class, typeInfo.getSecondLevelClass());
+    assertEquals(long.class, typeInfo.getRawClass());
   }
 
-  @SuppressWarnings("unchecked")
   public void testObjectType() throws Exception {
     TypeInfo typeInfo = new TypeInfo(String.class);
     assertFalse(typeInfo.isArray());
     assertTrue(typeInfo.isString());
-    assertEquals(String.class, typeInfo.getSecondLevelClass());
-
-    typeInfo = new TypeInfo(String[].class);
-    assertTrue(typeInfo.isArray());
-    assertEquals(String.class, typeInfo.getSecondLevelClass());
+    assertEquals(String.class, typeInfo.getRawClass());
   }
 
-  @SuppressWarnings("unchecked")
   public void testParameterizedTypes() throws Exception {
     Type type = new TypeToken<List<String>>() {}.getType();
     TypeInfo typeInfo = new TypeInfo(type);
 
     assertFalse(typeInfo.isArray());
-    assertEquals(List.class, typeInfo.getSecondLevelClass());
+    assertEquals(List.class, typeInfo.getRawClass());
+    assertEquals(type, typeInfo.getActualType());
   }
 
-  @SuppressWarnings("unchecked")
-  public void testArrayAsParameterizedTypes() throws Exception {
-    Type type = new TypeToken<List<String>[]>() {}.getType();
-
-    TypeInfo typeInfo = new TypeInfo(type);
-    assertTrue(typeInfo.isArray());
-    assertEquals(List.class, typeInfo.getSecondLevelClass());
-    assertEquals(String.class, typeInfo.getGenericClass());
-  }
-
-  @SuppressWarnings("unchecked")
   public void testGenericizedGenericType() throws Exception {
     Type type = new TypeToken<List<List<String>>>() {}.getType();
     Type genericType = new TypeToken<List<String>>() {}.getType();
 
     TypeInfo typeInfo = new TypeInfo(type);
     assertFalse(typeInfo.isArray());
-    assertEquals(List.class, typeInfo.getSecondLevelClass());
-    assertEquals(genericType, typeInfo.getGenericClass());
+    assertEquals(List.class, typeInfo.getRawClass());
+    Type actualTypeForFirstTypeVariable = TypeUtils.getActualTypeForFirstTypeVariable(type);
+    assertEquals(genericType, actualTypeForFirstTypeVariable);
 
     typeInfo = new TypeInfo(genericType);
-    assertEquals(String.class, typeInfo.getGenericClass());
+    actualTypeForFirstTypeVariable = TypeUtils.getActualTypeForFirstTypeVariable(genericType);
+    assertEquals(String.class, actualTypeForFirstTypeVariable);
   }
 
-  @SuppressWarnings("unchecked")
   public void testStrangeTypeParameters() throws Exception {
     try {
       new TypeInfo(new Type() {});
