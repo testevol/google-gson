@@ -106,4 +106,9 @@ final class MappedObjectConstructor implements ObjectConstructor {
     }
     instanceCreatorMap.register(typeOfT, creator);
   }
+  
+  @Override
+  public String toString() {
+    return instanceCreatorMap.toString();
+  }
 }

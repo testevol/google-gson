@@ -17,6 +17,8 @@
 package com.google.gson.functional;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.InstanceCreator;
 import com.google.gson.JsonParseException;
 import com.google.gson.common.TestTypes.ArrayOfObjects;
 import com.google.gson.common.TestTypes.BagOfPrimitiveWrappers;
@@ -32,6 +34,7 @@ import com.google.gson.common.TestTypes.PrimitiveArray;
 
 import junit.framework.TestCase;
 
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedList;
@@ -56,6 +59,22 @@ public class ObjectTest extends TestCase {
     gson = new Gson();
   }
 
+  public void testJsonInSingleQuotesDeserialization() {
+    String json = "{'stringValue':'no message','intValue':10,'longValue':20}";
+    BagOfPrimitives target = gson.fromJson(json, BagOfPrimitives.class);
+    assertEquals("no message", target.stringValue);
+    assertEquals(10, target.intValue);
+    assertEquals(20, target.longValue);
+  }
+  
+  public void testJsonInMixedQuotesDeserialization() {
+    String json = "{\"stringValue\":'no message','intValue':10,'longValue':20}";
+    BagOfPrimitives target = gson.fromJson(json, BagOfPrimitives.class);
+    assertEquals("no message", target.stringValue);
+    assertEquals(10, target.intValue);
+    assertEquals(20, target.longValue);
+  }
+  
   public void testBagOfPrimitivesSerialization() throws Exception {
     BagOfPrimitives target = new BagOfPrimitives(10, 20, false, "stringValue");
     assertEquals(target.getExpectedJson(), gson.toJson(target));
@@ -299,41 +318,9 @@ public class ObjectTest extends TestCase {
     assertEquals(BagOfPrimitives.DEFAULT_VALUE, target.longValue);
   }
 
-  public void testReallyLongStringsDeserialization() throws Exception {
-    StringBuilder sb = new StringBuilder(8096);
-    sb.append("Once upon a time there was a really long string that caused a StackOverFlowError\n");
-    sb.append("and now it is fixed and instead throws a JsonParserException.....Yippie!!!\n");
-    sb.append("Wow....that is a really long string that is meant to be an exception stack trace, ");
-    sb.append("but is not :( \n\n\n\n\n\n.");
-    sb.append("lalalalala \n\n\n.");
-    sb.append("C'est la vie!!! \n\n\n\n\n");
-
-    for (int i = 0; i < 10; i++) {
-      sb.append(sb.toString());
-    }
-
-    while (true) {
-      try {
-        String stackTrace = sb.toString();
-        sb.append(stackTrace);
-        String json = "{\"message\":\"Error message.\","
-          + "\"stackTrace\":\"" + stackTrace + "\"}";
-        parseLongJson(json);
-      } catch (JsonParseException expected) {
-        break;
-      }
-    }
-  }
-
   public void testEmptyCollectionInAnObjectSerialization() throws Exception {
     ContainsReferenceToSelfType target = new ContainsReferenceToSelfType();
     assertEquals("{\"children\":[]}", gson.toJson(target));
-  }
-
-  private void parseLongJson(String json) throws JsonParseException {
-    ExceptionHolder target = gson.fromJson(json, ExceptionHolder.class);
-    assertTrue(target.message.contains("Error"));
-    assertTrue(target.stackTrace.contains("Yippie"));
   }
 
   public void testCircularSerialization() throws Exception {
@@ -374,6 +361,49 @@ public class ObjectTest extends TestCase {
     assertEquals(target.getExpectedJson(), gson.toJson(target));
   }
 
+  /**
+   * Tests that a class field with type Object can be serialized properly. 
+   * See issue 54
+   */
+  public void testClassWithObjectFieldSerialization() {
+    ClassWithObjectField obj = new ClassWithObjectField();
+    obj.member = "abc";
+    String json = gson.toJson(obj);
+    assertTrue(json.contains("abc"));
+  }
+  
+  private static class ClassWithObjectField {
+    Object member;
+  }
+  
+  public void testInnerClassSerialization() {    
+    Parent p = new Parent();
+    Parent.Child c = p.new Child();
+    String json = gson.toJson(c);
+    assertTrue(json.contains("value2"));
+    assertFalse(json.contains("value1"));
+  }
+   
+  public void testInnerClassDeserialization() {
+    final Parent p = new Parent();
+    Gson gson = new GsonBuilder().registerTypeAdapter(
+        Parent.Child.class, new InstanceCreator<Parent.Child>() {
+      public Parent.Child createInstance(Type type) {
+        return p.new Child();
+      }      
+    }).create();
+    String json = "{'value2':3}";
+    Parent.Child c = gson.fromJson(json, Parent.Child.class);
+    assertEquals(3, c.value2);
+  }
+   
+  private static class Parent {
+    int value1 = 1;
+    private class Child {
+      int value2 = 2;
+    }
+  }
+  
   public static class ClassWithSubInterfacesOfCollection {
     private List<Integer> list;
     private Queue<Long> queue;
@@ -500,18 +530,6 @@ public class ObjectTest extends TestCase {
     public int a;
     private ClassWithPrivateNoArgsConstructor() {
       a = 10;
-    }
-  }
-
-  private static class ExceptionHolder {
-    public final String message;
-    public final String stackTrace;
-    public ExceptionHolder() {
-      this("", "");
-    }
-    public ExceptionHolder(String message, String stackTrace) {
-      this.message = message;
-      this.stackTrace = stackTrace;
     }
   }
 }

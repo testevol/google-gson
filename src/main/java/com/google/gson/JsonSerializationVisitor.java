@@ -80,14 +80,22 @@ final class JsonSerializationVisitor implements ObjectNavigator.Visitor {
   }
 
   public void visitArrayField(Field f, Type typeOfF, Object obj) {
-    if (!isFieldNull(f, obj)) {
+    if (isFieldNull(f, obj)) {
+      if (serializeNulls) {
+        addChildAsElement(f, new JsonNull());
+      }
+    } else {
       Object array = getFieldValue(f, obj);
       addAsChildOfObject(f, typeOfF, array);
     }
   }
 
   public void visitCollectionField(Field f, Type typeOfF, Object obj) {
-    if (!isFieldNull(f, obj)) {
+    if (isFieldNull(f, obj)) {
+      if (serializeNulls) {
+        addChildAsElement(f, new JsonNull());
+      }
+    } else {
       if (typeOfF == null) {
         throw new RuntimeException("Can not handle non-generic collections");
       }
@@ -116,6 +124,16 @@ final class JsonSerializationVisitor implements ObjectNavigator.Visitor {
       }
     } else {
       Object fieldValue = getFieldValue(f, obj);
+      // See if the fieldValue has better type information than the specified typeOfF
+      // This takes care of situations where the field was declared as an Object, but the
+      // actual value contains something more specific. See Issue 54.
+      if (fieldValue != null && typeOfF instanceof Class) {
+        Class<?> classOfF = (Class<?>) typeOfF;
+        Class<?> actualClassOfF = fieldValue.getClass();
+        if (classOfF.isAssignableFrom(actualClassOfF)) {
+          typeOfF = actualClassOfF;
+        }
+      }
       addAsChildOfObject(f, typeOfF, fieldValue);
     }
   }
@@ -151,8 +169,12 @@ final class JsonSerializationVisitor implements ObjectNavigator.Visitor {
     return childVisitor.getJsonElement();
   }
 
-  public void visitPrimitiveField(Field f, Type typeOfF, Object obj) {
-    if (!isFieldNull(f, obj)) {
+  public void visitPrimitiveField(Field f, Type typeOfF, Object obj) {    
+    if (isFieldNull(f, obj)) {
+      if (serializeNulls) {
+        addChildAsElement(f, new JsonNull());
+      }      
+    } else {
       TypeInfo typeInfo = new TypeInfo(typeOfF);
       if (typeInfo.isPrimitiveOrStringAndNotAnArray()) {
         Object fieldValue = getFieldValue(f, obj);

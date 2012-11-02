@@ -117,7 +117,8 @@ public final class Gson {
    *   {@link java.math.BigDecimal}, and {@link java.math.BigInteger} classes. If you would prefer
    *   to change the default representation, you can do so by registering a type adapter through
    *   {@link GsonBuilder#registerTypeAdapter(Type, Object)}. </li>
-   *   <li>The default Date format is same as {@link java.text.DateFormat#DEFAULT}. You can change
+   *   <li>The default Date format is same as {@link java.text.DateFormat#DEFAULT}. This format 
+   *   ignores the millisecond portion of the date during serialization. You can change
    *   this by invoking {@link GsonBuilder#setDateFormat(int)} or
    *   {@link GsonBuilder#setDateFormat(String)}. </li>
    *   <li>By default, Gson ignores the {@link com.google.gson.annotations.Expose} annotation.
@@ -400,5 +401,19 @@ public final class Gson {
       // Should this be a different exception???
       throw new JsonParseException(e);
     }
+  }
+  
+  @Override 
+  public String toString() {
+	StringBuilder sb = new StringBuilder("{");
+    sb.append("serializeNulls:").append(serializeNulls);
+	sb.append(",serializers:").append(serializers);
+	sb.append(",deserializers:").append(deserializers);
+	// using the name instanceCreator instead of ObjectConstructor since the users of Gson are 
+	// more familiar with the concept of Instance Creators. Moreover, the objectConstructor is
+	// just a utility class around instance creators, and its toString() only displays them.
+    sb.append(",instanceCreators:").append(objectConstructor);
+	sb.append("}");
+	return sb.toString();
   }
 }
